@@ -26,6 +26,8 @@ do
     SDKVERSION=${TVOS_SDKVERSION}
   elif [[ "$ARCH" == mac* ]]; then
     SDKVERSION=${MACOS_SDKVERSION}
+  elif [[ "$ARCH" == catalyst* ]]; then
+    SDKVERSION=${CATALYST_SDKVERSION}
   elif [[ "$ARCH" == watchos* ]]; then
     SDKVERSION=${WATCHOS_SDKVERSION}
   else
@@ -35,11 +37,11 @@ do
   # Determine platform, override arch for tvOS builds
   if [[ "${ARCH}" == "ios_x86_64" || "${ARCH}" == "ios_i386" ]]; then
     PLATFORM="iPhoneSimulator"
-  elif [ "${ARCH}" == "tv_x86_64" ]; then
+  elif [[ "${ARCH}" == "tv_x86_64" ]]; then
     PLATFORM="AppleTVSimulator"
-  elif [ "${ARCH}" == "tv_arm64" ]; then
+  elif [[ "${ARCH}" == "tv_arm64" ]]; then
     PLATFORM="AppleTVOS"
-  elif [[ "${ARCH}" == "mac_x86_64" || "${ARCH}" == "mac_i386" ]]; then
+  elif [[ "${ARCH}" == "mac_x86_64" || "${ARCH}" == "mac_i386" || "${ARCH}" == "catalyst_x86_64" ]]; then
     PLATFORM="MacOSX"
   elif [[ "${ARCH}" == "watchos_arm64_32" || "${ARCH}" == "watchos_armv7k" ]]; then
     PLATFORM="WatchOS"
@@ -47,6 +49,11 @@ do
     PLATFORM="WatchSimulator"
   else
     PLATFORM="iPhoneOS"
+  fi
+
+  _platform="${PLATFORM}"
+  if [[ "${ARCH}" == catalyst* ]]; then
+    _platform="Catalyst"
   fi
 
   # Extract ARCH from pseudo ARCH (part after first underscore)
@@ -88,6 +95,8 @@ do
     LOCAL_CONFIG_OPTIONS="${LOCAL_CONFIG_OPTIONS} -DHAVE_FORK=0 -mwatchos-version-min=${WATCHOS_MIN_SDK_VERSION}"
     echo "  Patching Configure..."
     LC_ALL=C sed -i -- 's/D\_REENTRANT\:iOS/D\_REENTRANT\:WatchOS/' "./Configure"
+  elif [[ "${_platform}" == "Catalyst" ]]; then
+    LOCAL_CONFIG_OPTIONS="${LOCAL_CONFIG_OPTIONS} -mmacosx-version-min=${CATALYST_MIN_SDK_VERSION} --target=x86_64-apple-ios13.0-macabi"
   elif [[ "${PLATFORM}" == MacOSX* ]]; then
     LOCAL_CONFIG_OPTIONS="${LOCAL_CONFIG_OPTIONS} -mmacosx-version-min=${MACOS_MIN_SDK_VERSION}"
   else

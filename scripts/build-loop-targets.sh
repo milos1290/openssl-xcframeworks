@@ -26,6 +26,8 @@ do
     SDKVERSION="${TVOS_SDKVERSION}"
   elif [[ "${TARGET}" == macos* ]]; then
     SDKVERSION="${MACOS_SDKVERSION}"
+  elif [[ "${TARGET}" == mac-catalyst-* ]]; then
+    SDKVERSION="${CATALYST_SDKVERSION}"
   elif [[ "${TARGET}" == watchos* ]]; then
     SDKVERSION="${WATCHOS_SDKVERSION}"
   else
@@ -39,6 +41,7 @@ do
   export TVOS_MIN_SDK_VERSION
   export WATCHOS_MIN_SDK_VERSION
   export CONFIG_DISABLE_BITCODE
+  export CATALYST_MIN_SDK_VERSION
 
   # Determine platform
   if [[ "${TARGET}" == "ios-sim-cross-"* ]]; then
@@ -53,6 +56,8 @@ do
     PLATFORM="WatchSimulator"
   elif [[ "${TARGET}" == "watchos"* ]]; then
     PLATFORM="WatchOS"
+  elif [[ "${TARGET}" == "mac-catalyst-"* ]]; then
+    PLATFORM="MacOSX"
   else
     PLATFORM="iPhoneOS"
   fi
@@ -66,6 +71,11 @@ do
   export CROSS_SDK="${PLATFORM}${SDKVERSION}.sdk"
 
   # Prepare TARGETDIR and SOURCEDIR
+  _platform="${PLATFORM}"
+  if [[ "${TARGET}" == "mac-catalyst-"* ]]; then
+    _platform="Catalyst"
+  fi
+
   prepare_target_source_dirs
 
   ## Determine config options
@@ -78,6 +88,12 @@ do
   if [[ "${CONFIG_ENABLE_EC_NISTP_64_GCC_128}" == "true" && "${ARCH}" == *64  ]]; then
     LOCAL_CONFIG_OPTIONS="${LOCAL_CONFIG_OPTIONS} enable-ec_nistp_64_gcc_128"
   fi
+  
+  # openssl-1.1.1 tries to use an unguarded fork(), affecting AppleTVOS and WatchOS.
+  # Luckily this is only present in the testing suite and can be built without it.
+  if [[ $PLATFORM == "AppleTV"* || $PLATFORM == "Watch"* ]]; then
+    LOCAL_CONFIG_OPTIONS="${LOCAL_CONFIG_OPTIONS} no-tests"
+  fi
 
   # Run Configure
   run_configure
@@ -87,6 +103,7 @@ do
 
   # Run make install
   set -e
+
   if [ "${LOG_VERBOSE}" == "verbose" ]; then
     make install_dev | tee -a "${LOG}"
   else
