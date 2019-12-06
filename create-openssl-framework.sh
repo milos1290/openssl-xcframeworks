@@ -1,7 +1,7 @@
 #!/bin/bash
 
 set -euo pipefail
-set -x
+
 # Determine script directory
 SCRIPTDIR=$(cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd)
 
@@ -20,8 +20,7 @@ source "${SCRIPTDIR}/scripts/min-sdk-versions.sh"
 #
 # Output help information.
 #
-echo_help()
-{
+echo_help() {
   cat <<HEREDOC
 Usage: $0 [options...] static|xcstatic|dynamic|xcdynamic
 Options
@@ -34,12 +33,42 @@ Commands
      xcstatic                      Build an XCFramework meant for static linking.
      dynamic                       Build per-platform frameworks meant for dynamic linking.
      xcdynamic                     Build an XCFramework meant for dynamic linking.
+     carthage                      Build the Xcode project via Carthage and Archive it. Really only
+                                   useful for the maintainer to prepare the binary version of this
+                                   package.
      
 The command specified above will build the specified library type based on the targets that were
 built with the "build-libssl.sh" script, which must be used first in order to build the object
 files.
 
 HEREDOC
+}
+
+
+#
+# A nice spinner.
+#
+spinner() {
+  local x=NO
+  if [ -o xtrace ]; then
+    x=YES
+    set +x
+  fi
+  
+  local pid=$!
+  local delay=0.75
+  local spinstr='|/-\' #\'' (<- fix for some syntax highlighters)
+  while [ "$(ps a | awk '{print $1}' | grep $pid)" ]; do
+    local temp=${spinstr#?}
+    printf "  [%c]" "$spinstr"
+    local spinstr=$temp${spinstr%"$temp"}
+    sleep $delay
+    printf "\b\b\b\b\b"
+  done
+
+  wait $pid
+  if [[ $x == YES ]]; then set -x; fi
+  return $?
 }
 
 
@@ -93,9 +122,10 @@ function make_mac_symlinks() {
 
 
 #
-# build a dynamic library for each architecture found in bin
+# Build a dynamic library for each architecture found in bin, as well as combine the
+# individual libraries into a single static library suitable for use in a framework.
 #
-function build_dylibs() {
+function build_libraries() {
     DEVELOPER=`xcode-select -print-path`
     FW_EXEC_NAME="${FWNAME}.framework/${FWNAME}"
     INSTALL_NAME="@rpath/${FW_EXEC_NAME}"
@@ -121,7 +151,7 @@ function build_dylibs() {
           _platform="MacOSX"
         fi
 
-        echo "Assembling .dylib for $PLATFORM $SDKVERSION ($ARCH)"
+        echo "Assembling .dylib and .a for $PLATFORM $SDKVERSION ($ARCH)"
 
         CROSS_TOP="${DEVELOPER}/Platforms/${_platform}.platform/Developer"
         CROSS_SDK="${_platform}${SDKVERSION}.sdk"
@@ -145,7 +175,11 @@ function build_dylibs() {
             MIN_SDK="-ios_version_min $IOS_MIN_SDK_VERSION"
         fi
 
-
+        local ISBITCODE=""
+        if otool -l "$TARGETDIR/lib/libcrypto.a" | grep "__bitcode" >/dev/null; then
+            ISBITCODE="-bitcode_bundle"
+        fi
+        
         TARGETOBJ="${TARGETDIR}/obj"
         rm -rf $TARGETOBJ
         mkdir $TARGETOBJ
@@ -154,9 +188,11 @@ function build_dylibs() {
         ar -x ../lib/libssl.a
         cd ..
 
+        libtool -static -no_warning_for_no_symbols -o ${FWNAME}.a lib/libcrypto.a lib/libssl.a
+
         ld obj/*.o \
             -dylib \
-            -bitcode_bundle \
+            $ISBITCODE \
             -lSystem \
             -arch $ARCH \
             $MIN_SDK \
@@ -167,6 +203,7 @@ function build_dylibs() {
             -o $FWNAME.dylib
         install_name_tool -id $INSTALL_NAME $FWNAME.dylib
 
+        rm -rf obj/
         cd ..
     done
     cd ..
@@ -185,17 +222,21 @@ build_dynamic_framework() {
 
     echo -e "\nTargets:"
     for target in ${FILES[@]}; do
-        echo "   $target"
+        if otool -l "$target" | grep "__LLVM" >/dev/null; then
+            echo "   $target (contains bitcode)"
+        else
+            echo "   $target (without bitcode)"
+        fi
     done
 
 
     if [[ ${#FILES[@]} -gt 0 && -e ${FILES[0]} ]]; then
-        echo "Creating dynamic framework for $SYS"
+        printf "Creating dynamic framework for $SYS ($(basename $(dirname $FWDIR)))..."
         mkdir -p $FWDIR/Headers
         lipo -create ${FILES[@]} -output $FWDIR/$FWNAME
         cp -r include/$FWNAME/* $FWDIR/Headers/
         cp -L $SCRIPTDIR/assets/$SYS/Info.plist $FWDIR/Info.plist
-        echo "Created $FWDIR"
+        echo -e " done:\n   $FWDIR"
         check_bitcode $FWDIR
         make_mac_symlinks $FWDIR $SYS
     else
@@ -215,18 +256,28 @@ build_static_framework() {
     local SYS="$2"
     local FILES=($3)
 
-    if [[ -e ${FILES[0]} && -e ${FILES[1]} ]]; then
-        echo -e "\nCreating static framework for $SYS, using $(dirname $(dirname ${FILES[0]}))"
-        mkdir -p $FWDIR/Headers
-        libtool -static -o $FWDIR/$FWNAME ${FILES[0]} ${FILES[1]}
-        cp -r include/$FWNAME/* $FWDIR/Headers/
-        cp -L $SCRIPTDIR/assets/$SYS/Info.plist $FWDIR/Info.plist
-        echo "Created $FWDIR"
-        check_bitcode $FWDIR
-        make_mac_symlinks $FWDIR $SYS
+    echo -e "\nCreating static framework for $SYS"
+    for FILE in ${FILES[@]}; do
+        if otool -l "$FILE" | grep "__bitcode" >/dev/null; then
+            echo "   $FILE (contains bitcode)"
+        else
+            echo "   $FILE (without bitcode)"
+        fi
+    done
+    mkdir -p $FWDIR/Headers
+    
+    # Don't lipo single files.
+    if [[ ${#FILES[@]} -gt 1 ]]; then
+        lipo -create ${FILES[@]} -output $FWDIR/$FWNAME
     else
-        echo "Skipped framework for $SYS"
-    fi    
+        cp ${FILES[0]} $FWDIR/$FWNAME
+    fi
+    
+    cp -r include/$FWNAME/* $FWDIR/Headers/
+    cp -L $SCRIPTDIR/assets/$SYS/Info.plist $FWDIR/Info.plist
+    echo "Created $FWDIR"
+    check_bitcode $FWDIR
+    make_mac_symlinks $FWDIR $SYS
 }
 
 
@@ -243,7 +294,7 @@ build_xcframework() {
     
     echo
     xcodebuild -create-xcframework $ARGS -output "$BUILD_DIR/$FWROOT/$FWNAME.xcframework"
-    
+
     # These intermediate frameworks are silly, and not needed any more.
     find ${FWROOT} -mindepth 1 -maxdepth 1 -type d -not -name "$FWNAME.xcframework" -exec rm -rf '{}' \;
 }
@@ -273,6 +324,11 @@ for i in "$@"; do
         FWROOT="${i#*=}"
         FWROOT="${FWROOT/#\~/$HOME}"
         shift
+        ;;
+      carthage)
+        (carthage build --configuration Release --no-use-binaries --no-skip-current  --project-directory .) & spinner
+        (carthage archive) & spinner
+        exit
         ;;
       static|xcstatic|dynamic|xcdynamic)
         if [[ ! -z $COMMAND ]]; then
@@ -315,13 +371,13 @@ if [ -d "${BUILD_DIR}/${FWROOT}" ]; then
     rm -rf "${BUILD_DIR}/${FWROOT}"
 fi
 
-# Everything happens starting in the build directory.
-cd $BUILD_DIR
 
 # Perform the build.
-if [ $FWTYPE == "dynamic" ]; then
 
-    build_dylibs
+cd $BUILD_DIR
+build_libraries
+
+if [ $FWTYPE == "dynamic" ]; then
 
 	if [[ $FWXC == NO ]]; then
 		# create per platform frameworks, which might be all a developer needs.
@@ -332,10 +388,14 @@ if [ $FWTYPE == "dynamic" ]; then
     	done
 
     else
-		# create per target frameworks, which will be combined into a single XCFramework
+		# Create per destination frameworks, which will be combined into a single XCFramework.
+		# xcodebuild -create-xcframework only works with per destination frameworks, e.g.,
+		# iOS devices, tvOS simulator, etc., which must already have fat libraries for the
+		# architectures.
 		for SYS in ${ALL_SYSTEMS[@]}; do
 			cd $BUILD_DIR/bin
-			TARGETS=(${SYS}*)
+			ALL_TARGETS=(${SYS}*)
+			TARGETS=$(for TARGET in ${ALL_TARGETS[@]}; do echo "${TARGET%-*}"; done | sort -u)
 			cd ..
 			for TARGET in ${TARGETS[@]}; do		
                 FWDIR="$BUILD_DIR/$FWROOT/$TARGET/$FWNAME.framework"
@@ -343,12 +403,9 @@ if [ $FWTYPE == "dynamic" ]; then
                 build_dynamic_framework $FWDIR $SYS "${FILES[*]}"
             done
 		done
-		
+
 		build_xcframework		
     fi
-
-    # The dylibs aren't required any longer.
-    rm $BUILD_DIR/bin/*/$FWNAME.dylib
     
 else
 
@@ -356,19 +413,19 @@ else
 		# create per platform frameworks, which might be all a developer needs.
         for SYS in ${ALL_SYSTEMS[@]}; do
             FWDIR="$BUILD_DIR/$FWROOT/$SYS/$FWNAME.framework"
-            FILES=($BUILD_DIR/lib/lib{crypto,ssl}-$SYS*.a)
+            FILES=($BUILD_DIR/bin/${SYS}*/${FWNAME}.a)
             build_static_framework $FWDIR $SYS "${FILES[*]}"
         done    
     else
-		# create per target frameworks, which will be combined into a single XCFramework
+		# Create per destination frameworks, which will be combined into a single XCFramework.
 		for SYS in ${ALL_SYSTEMS[@]}; do
 			cd $BUILD_DIR/bin
-			TARGETS=(${SYS}*)
+			ALL_TARGETS=(${SYS}*)
+			TARGETS=$(for TARGET in ${ALL_TARGETS[@]}; do echo "${TARGET%-*}"; done | sort -u)
 			cd ..
-				
 			for TARGET in ${TARGETS[@]}; do
                 FWDIR="$BUILD_DIR/$FWROOT/$TARGET/$FWNAME.framework"
-                FILES=($BUILD_DIR/bin/${TARGET}*/lib/lib{crypto,ssl}.a)
+                FILES=($BUILD_DIR/bin/${TARGET}*/${FWNAME}.a)
                 build_static_framework $FWDIR $SYS "${FILES[*]}"
             done
 		done
@@ -376,3 +433,7 @@ else
 		build_xcframework
     fi
 fi
+
+# The built libraries aren't required any longer.
+rm $BUILD_DIR/bin/*/$FWNAME.{dylib,a}
+

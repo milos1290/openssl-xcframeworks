@@ -37,12 +37,12 @@ DEFAULTVERSION="1.1.1d"
 # Available set of architectures (OpenSSL <= 1.0.2) or targets (OpenSSL >= 1.1.1) to build.
 # These are distinct from the default sets, below, in that these are shown in help as available,
 # and are supported by OpenSSL, but we don't really want to build all of them all the time.
-ARCHS_AVAIL="ios_x86_64 ios_arm64 tv_x86_64 tv_arm64 mac_x86_64 watchos_armv7k watchos_arm64_32 watchos_i386 catalyst_x86_64"
-TRGTS_AVAIL="ios-sim-cross-x86_64 ios64-cross-arm64 tvos-sim-cross-x86_64 tvos64-cross-arm64 macos64-x86_64 watchos-cross-armv7k watchos-cross-arm64_32 watchos-sim-cross-i386 mac-catalyst-x86_64"
+ARCHS_AVAIL="ios_x86_64 ios_armv7 ios_arm64 catalyst_x86_64 tv_x86_64 tv_arm64 mac_x86_64 watchos_armv7k watchos_arm64_32 watchos_i386"
+TRGTS_AVAIL="ios-sim-cross-x86_64 ios-cross-armv7 ios64-cross-arm64 mac-catalyst-x86_64 tvos-sim-cross-x86_64 tvos64-cross-arm64 macos64-x86_64 watchos-cross-armv7k watchos-cross-arm64_32 watchos-sim-cross-i386"
 
 # Default set of architectures (OpenSSL <= 1.0.2) or targets (OpenSSL >= 1.1.1) to build
-ARCHS_DEFAULT="ios_x86_64 ios_arm64 tv_x86_64 tv_arm64 mac_x86_64 watchos_arm64_32 watchos_i386 catalyst_x86_64"
-TRGTS_DEFAULT="ios-sim-cross-x86_64 ios64-cross-arm64 tvos-sim-cross-x86_64 tvos64-cross-arm64 macos64-x86_64 watchos-cross-arm64_32 watchos-sim-cross-i386 mac-catalyst-x86_64"
+ARCHS_DEFAULT="$ARCHS_AVAIL"
+TRGTS_DEFAULT="$TRGTS_AVAIL"
 
 # Minimum SDK versions to build for
 source "${SCRIPTDIR}/scripts/min-sdk-versions.sh"
