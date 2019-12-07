@@ -16,41 +16,69 @@ builds of the OpenSSL library on the iPhone, Apple TV, Apple Watch, macOS, and C
 
 However, this repository branches from Davide's repository by emphasizing support for:
 
-- macOS Catalyst
-- building XCFrameworks
-- installation via Carthage
+- builds XCFrameworks (hence the repository name) with truly universal libraries. With Xcode 11
+  and newer, XCFrameworks offer a single package with frameworks for every, single Apple
+  architecture. You no longer have to use run script build phases to slice and dice binary files;
+  Xcode will choose the right framework for the given target.
+
+- Supports all of the xcode $STANDARD_ARCHS by default for each Apple platform. This means that
+  the frameworks work with your Xcode project right out of the box, with no fussing about with
+  VALID_ARCHITECTURES, etc. It's tempting to leave old architectures (armv7, for example) behind,
+  but Apple still seems to expect them.
+
+- Builds traditional dynamic or static platform-specific frameworks, should that be your cup of
+  tea.
+
+- Builds traditional dylibs or static libraries (libcrypto.{dylib,a}, libssl.{dylib,a}), should
+  that be your preferred poison.
+
+- Supports installation via Carthage via the use of a fake framework.
+
+- Supports OpenSSL-1.1.1d and newer. It might work with version 1.1.0, but testing begins with
+  1.1.1d. Versions prior to 1.1.0 are definitely *not* supported. This is a forward-thinking
+  distribution; it's time to bite the bullet and update to the new API's.
+
+
+# What's Built
+
+The `build-openssl.sh` script builds per-platform static libraries `libcrypto.a` and `libssl.a`;
+if you've built multiple architectures for a platform (which is default), then these static
+libraries will be fat binaries consisting of all architectures that were built.
+
+Additionally, the per-architecture static libraries are also available, but these are generally
+not useful to most programmers.
+
+Dynamic libraries (.dylibs) have generally fallen out of favor on macOS, and are not built. You
+should use frameworks instead.
+
+The `create-framework.sh` script builds frameworks, which are the preferred and simplest forms
+of library integration. Standard per-platform dynamic frameworks will be built, but
+per-platform static frameworks can also be built. This latter option isn't a framework per se,
+but a convenient means of distribution.
+
+The script also builds both dynamic and static XCFrameworks, which are new in Xcode 11 and newer,
+and easily allow you to integrate _all_ platforms and architectures in a single distributable.
 
 
 # Compile library
 
-Compile OpenSSL 1.0.2t for default archs:
+
+Compile OpenSSL at the default version (currently 1.1.1d) for default targets:
 
 ```
-./build-libssl.sh --version=1.0.2t
+./build-openssl.sh
 ```
 
-Compile OpenSSL 1.1.1d for default targets:
+Compile OpenSSL at the default version for specific targets:
 
 ```
-./build-libssl.sh --version=1.1.1d
-```
-
-Compile OpenSSL 1.0.2d for specific archs:
-
-```
-./build-libssl.sh --version=1.0.2d --archs="ios_armv7 ios_arm64 mac_i386"
-```
-
-Compile OpenSSL 1.1.1d for specific targets:
-
-```
-./build-libssl.sh --version=1.1.1d --targets="ios-cross-armv7 macos64-x86_64"
+./build-openssl.sh --version=1.1.1d --targets="ios-cross-armv7 macos64-x86_64"
 ```
 
 For all options see:
 
 ```
-./build-libssl.sh --help
+./build-openssl.sh --help
 ```
 
 
@@ -59,25 +87,25 @@ For all options see:
 Statically linked:
 
 ```
-./create-openssl-framework.sh static
+./create-framework.sh static
 ```
 
 Statically linked as XCFramework:
 
 ```
-./create-openssl-framework.sh xcstatic
+./create-framework.sh xcstatic
 ```
 
 Dynamically linked:
 
 ```
-./create-openssl-framework.sh dynamic
+./create-framework.sh dynamic
 ```
 
 Dynamically linked as XCFramework:
 
 ```
-./create-openssl-framework.sh xcdynamic
+./create-framework.sh xcdynamic
 ```
 
 
