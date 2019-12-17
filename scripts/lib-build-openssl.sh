@@ -36,7 +36,7 @@ Building options
  -v, --verbose                     Enable verbose logging
      --verbose-on-error            Dump last 500 lines from log if error occurs (for Travis builds)
      --targets="TARGET TARGET ..." Space-separated list of build targets, one or more of:
-$(echo "${TRGTS_DEFAULT}" | fold -s -w 60  | sed -e "s|^|                                     |g")
+$(echo "${TARGETS_DEFAULT}" | fold -s -w 60  | sed -e "s|^|                                     |g")
 
 Other options
  -h, --help                        Print help (this message)
