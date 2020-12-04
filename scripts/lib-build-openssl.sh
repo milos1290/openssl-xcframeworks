@@ -227,7 +227,7 @@ target_build_loop()
       # Cross compile references, see Configurations/10-main.conf
       export CROSS_COMPILE="${DEVELOPER}/Toolchains/XcodeDefault.xctoolchain/usr/bin/"
       export CROSS_TOP="${DEVELOPER}/Platforms/${PLATFORM}.platform/Developer"
-      export CROSS_SDK="${PLATFORM}${SDKVERSION}.sdk"
+      export CROSS_SDK="${PLATFORM}.sdk"
 
       # Prepare TARGETDIR and SOURCEDIR
       SUBPLATFORM="${PLATFORM}"
@@ -241,7 +241,7 @@ target_build_loop()
       # Add build target, --prefix and prevent async (references to getcontext(),
       # setcontext() and makecontext() result in App Store rejections) and creation
       # of shared libraries (default since 1.1.0)
-      LOCAL_CONFIG_OPTIONS="${TARGET} --prefix=${TARGETDIR} ${CONFIG_OPTIONS} no-async no-shared"
+      LOCAL_CONFIG_OPTIONS="${TARGET} --prefix=${TARGETDIR} ${CONFIG_OPTIONS} no-async no-shared enable-deprecated"
 
       # Only relevant for 64 bit builds
       if [[ "${CONFIG_ENABLE_EC_NISTP_64_GCC_128}" == "true" && "${ARCH}" == *64  ]]; then

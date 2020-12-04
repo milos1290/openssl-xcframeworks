@@ -111,7 +111,7 @@ function build_libraries() {
 
         CROSS_TOP="${DEVELOPER}/Platforms/${_platform}.platform/Developer"
         CROSS_SDK="${_platform}${SDKVERSION}.sdk"
-        SDK="${CROSS_TOP}/SDKs/${CROSS_SDK}"
+        SDK="${CROSS_TOP}/SDKs/${_platform}.sdk"
 
         if [[ $PLATFORM == AppleTVSimulator* ]]; then
             MIN_SDK="-tvos_simulator_version_min $TVOS_MIN_SDK_VERSION"

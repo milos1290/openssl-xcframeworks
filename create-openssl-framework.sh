@@ -152,5 +152,5 @@ else
 fi
 
 # The built libraries aren't required any longer.
-rm $BUILD_DIR/bin/*/$FWNAME.{dylib,a}
+# rm $BUILD_DIR/bin/*/$FWNAME.{dylib,a}
 
